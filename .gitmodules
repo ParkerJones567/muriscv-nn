@@ -1,0 +1,3 @@
+[submodule "Sim/PEXT_Estimator"]
+	path = Sim/PEXT_Estimator
+	url = https://github.com/ParkerJones567/PEXT_Estimator.git

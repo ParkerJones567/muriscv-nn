@@ -18,7 +18,15 @@
 
 set(TEST_NAME toy)
 
-add_executable(${TEST_NAME}_tvm)
+if(${PEXT_PERF})
+    get_target_property(CSP_TOOLCHAIN_FILE ri5cy-csp CSP_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE ${CSP_TOOLCHAIN_FILE})
+    get_target_property(START_ASM_FILE ri5cy-csp START_ASM_FILE)
+    add_executable(${TEST_NAME}_tvm
+                   ${START_ASM_FILE})
+else()
+    add_executable(${TEST_NAME}_tvm)
+endif()
 
 if(USE_VEXT)
   set(MLF_DIR mlf_vext)
@@ -83,6 +91,10 @@ else()
 
 endif()
 
-target_link_libraries(${TEST_NAME}_tvm PRIVATE ${MURISCVNN_LIB})
+if(${PEXT_PERF})
+    target_link_libraries(${TEST_NAME}_tvm PRIVATE ${MURISCVNN_LIB} ri5cy-csp)
+else()
+    target_link_libraries(${TEST_NAME}_tvm PRIVATE ${MURISCVNN_LIB})
+endif()
 
 add_muriscv_nn_intg_test(${TEST_NAME}_tvm)

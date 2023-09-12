@@ -19,6 +19,12 @@
 # Simple macro that will create a test executable and register it with CTest
 macro(add_muriscv_nn_unit_test TEST_NAME)
 
+    if(${PEXT_PERF})
+        get_target_property(CSP_TOOLCHAIN_FILE ri5cy-csp CSP_TOOLCHAIN_FILE)
+        set(CMAKE_TOOLCHAIN_FILE ${CSP_TOOLCHAIN_FILE})
+        get_target_property(START_ASM_FILE ri5cy-csp START_ASM_FILE)
+    endif()
+
     # Move the "test" string from back to front in order to match test file name
     string(REGEX REPLACE "([^ ]*)_test$" "test_\\1" TEST_FILE_NAME ${TEST_NAME})
 
@@ -28,11 +34,19 @@ macro(add_muriscv_nn_unit_test TEST_NAME)
             ${CMAKE_SOURCE_DIR}/Tests/TestCases/${TEST_FILE_NAME}/${TEST_FILE_NAME}.c)
     else()
         add_executable(${TEST_NAME}
-            ${CMAKE_SOURCE_DIR}/Tests/TestCases/${TEST_FILE_NAME}/${TEST_FILE_NAME}.c)
+            ${CMAKE_SOURCE_DIR}/Tests/TestCases/${TEST_FILE_NAME}/${TEST_FILE_NAME}.c
+            ${START_ASM_FILE})
     endif()
 
-    target_link_libraries(${TEST_NAME} PUBLIC ${MURISCVNN_LIB}
+    if(${PEXT_PERF})
+        target_link_libraries(${TEST_NAME} PUBLIC ${MURISCVNN_LIB}
+                                              unity
+                                              ri5cy-csp)
+    else()
+        target_link_libraries(${TEST_NAME} PUBLIC ${MURISCVNN_LIB}
                                               unity)
+    endif()
+    
 
     # Register test with CTest and provide command to execute
     

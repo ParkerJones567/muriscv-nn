@@ -34,6 +34,8 @@ set_property(CACHE TOOLCHAIN PROPERTY STRINGS LLVM GCC x86 NONE)
 option(USE_VEXT "Use the RISC-V V Vector Extension" OFF)
 option(USE_PEXT "Use the RISC-V P Packed Extension" OFF)
 
+option(PEXT_PERF "PEXT Performance Estimation with ETISS" OFF)
+
 # Set the desired architecture and application binary interface.
 # For more info, see here https://www.sifive.com/blog/all-aboard-part-1-compiler-args
 # Useful combinations are:
@@ -54,12 +56,27 @@ if(${SIMULATOR} STREQUAL "Vicuna") # Vicuna only supports a reduced set of exten
 else() # All other (instruction level) simulator support the full RISC-V ISA
   if(USE_VEXT)
     set(RISCV_ARCH "rv32gcv" CACHE STRING "march argument to the compiler, using the vector extension")
+     set(RISCV_ABI "ilp32d" CACHE STRING "mabi argument to the compiler")
   elseif(USE_PEXT)
-    set(RISCV_ARCH "rv32gcp" CACHE STRING "march argument to the compiler, using the packed extension")
+    if(PEXT_PERF)
+        set(RISCV_ARCH "rv32imp_zicsr" CACHE STRING "march argument to the compiler, using the packed extension")
+        set(RISCV_ABI "ilp32" CACHE STRING "mabi argument to the compiler")
+    else()
+        set(RISCV_ARCH "rv32gcp" CACHE STRING "march argument to the compiler, using the packed extension")
+        set(RISCV_ABI "ilp32d" CACHE STRING "mabi argument to the compiler")
+    endif()
+        
   else()
-    set(RISCV_ARCH "rv32gc" CACHE STRING "march argument to the compiler, using only scalar instructions")
+    if(PEXT_PERF)
+        set(RISCV_ARCH "rv32im_zicsr" CACHE STRING "march argument to the compiler, using only scalar instructions")
+        set(RISCV_ABI "ilp32" CACHE STRING "mabi argument to the compiler")
+    else()
+        set(RISCV_ARCH "rv32gc" CACHE STRING "march argument to the compiler, using only scalar instructions")
+        set(RISCV_ABI "ilp32d" CACHE STRING "mabi argument to the compiler")
+    endif()
+
   endif()
-  set(RISCV_ABI "ilp32d" CACHE STRING "mabi argument to the compiler")
+ 
   set(RISCV_CMODEL "medlow" CACHE STRING "mcmodel argument to the compiler")
 endif()
 
@@ -137,6 +154,80 @@ add_subdirectory(Source)
 
 add_subdirectory(Sim)
 
+
+if(PEXT_PERF)
+    ############################ CSP LINKING ###############################
+    ########################################################################
+    define_property(TARGET PROPERTY CSP_TOOLCHAIN_FILE
+        BRIEF_DOCS "used cmake macro file"
+        FULL_DOCS "holds the cmake macro file location used for the target"
+    )
+    define_property(TARGET PROPERTY CSP_DIR
+        BRIEF_DOCS "target chip support package source directory"
+        FULL_DOCS "may be used to retrieve additional source files"
+    )
+
+    define_property(TARGET PROPERTY CSP_START_ASM_FILE
+        BRIEF_DOCS "target chip support standard start assembly compatible with CSP"
+        FULL_DOCS "may be used to retrieve additional source files"
+    )
+
+
+
+
+    ####################################################################################################
+    # chip support package sources #####################################################################
+    ####################################################################################################
+    add_subdirectory(Sim/PEXT_Estimator/MYPROC/target_libs/csp)
+
+    include(Sim/PEXT_Estimator/MYPROC/target_libs/cmake/ri5cy/target-config.cmake)
+
+
+    set(CFG_XLINK_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/Sim/PEXT_Estimator/MYPROC/target_libs/csp/ri5cy/link.ld)
+    set(ri5cy_TOOLCHAIN_FILE "MYPROC/target_libs/cmake/ri5cy/toolchain.cmake")
+    configure_file("Sim/PEXT_Estimator/MYPROC/target_libs/cmake/toolchain.cmake.in" ${ri5cy_TOOLCHAIN_FILE} @ONLY)
+    set(CMAKE_TOOLCHAIN_FILE ${CMAKE_CURRENT_BINARY_DIR}/${ri5cy_TOOLCHAIN_FILE})
+    include(${CMAKE_TOOLCHAIN_FILE})
+    #project(fivp-sdk LANGUAGES CXX C ASM) ##Project already set
+
+    message("${VP} ROM_START: ${ROM_START}")
+    message("${VP} ROM_SIZE: ${ROM_SIZE}")
+    message("${VP} RAM_START: ${RAM_START}")
+    message("${VP} RAM_SIZE: ${RAM_SIZE}")
+
+    # csp libs #################################################################################
+    add_library( ri5cy-csp STATIC
+        ${ri5cy_CSP_SRCS}
+    )
+    target_include_directories( ri5cy-csp PUBLIC
+        ${ri5cy_CSP_INCS}
+    )
+    target_compile_definitions(ri5cy-csp PUBLIC
+        -DVP_ri5cy
+    )
+    set_property( TARGET ri5cy-csp
+        PROPERTY CSP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Sim/PEXT_Estimator/MYPROC/target_libs/csp/ri5cy"
+    )
+    set_property( TARGET ri5cy-csp
+        PROPERTY CSP_TOOLCHAIN_FILE
+        ${CMAKE_TOOLCHAIN_FILE}
+    )
+    set_property( TARGET ri5cy-csp
+        PROPERTY TOOLCHAIN_FILE
+        ${CMAKE_INSTALL_PREFIX}/cmake/ri5cy-toolchain.cmake
+    )
+    set_property( TARGET ri5cy-csp
+        PROPERTY START_ASM_FILE "${CMAKE_CURRENT_SOURCE_DIR}/Sim/PEXT_Estimator/MYPROC/target_libs/csp/ri5cy/../common/crt0.S"
+    )
+    set_property( TARGET ri5cy-csp
+        PROPERTY PUBLIC_HEADER
+        ${ri5cy_CSP_PUBLIC_HEADERS}
+    )
+    set_target_properties( ri5cy-csp
+        PROPERTIES EXPORT_PROPERTIES TOOLCHAIN_FILE
+    )
+endif()
+
 if(${ENABLE_UNIT_TESTS} OR ${ENABLE_INTG_TESTS})
   enable_testing()
 endif()
@@ -147,4 +238,8 @@ endif()
 
 if(${ENABLE_INTG_TESTS})
   add_subdirectory(Integration)
+endif()
+
+if(${PEXT_PERF})
+  add_subdirectory(Sim/PEXT_Estimator/Tests)
 endif()
