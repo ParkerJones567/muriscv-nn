@@ -1,0 +1,120 @@
+name: corePerfDSL_Benchmarks
+
+on:
+  workflow_dispatch:
+
+jobs:
+  Run_Benchmark:
+  
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        benchmark: [aww, vww, ic, toy]
+        backend: [tvmaot]   #Need to add tflmi once fixed
+    
+    steps:
+    
+    - uses: actions/checkout@v3
+    
+    #TODO: These benchmarks should be included in mlonmcu.  Following steps will need to be reworked
+    
+    - name: Download rv32im and rv32imp
+      working-directory: ./Toolchain
+      run: |
+        ./download_rv32im.sh
+        ./download_rv32imp.sh
+      
+    - name: Setup TVM
+      working-directory: ./Integration/tvm
+      run: ./setup_tvm.sh
+
+    - name: Download Dependencies
+      run: git submodule update --init --recursive
+      
+    - name: Setup Performance Testing Environment
+      working-directory: ./Sim/PEXT_Estimator/Scripts
+      run: |
+        ./apply_patches.sh
+        ./Copy_PEXT_ETISS.sh
+        ./Copy_MYPROC.sh
+    
+        
+    - name: Run ${{matrix.benchmark}} Benchmark rv32im
+      working-directory: ./Sim/PEXT_Estimator/Scripts
+      run: ./test_muRISCV_nn.sh -b ${{matrix.benchmark}} > ${{matrix.benchmark}}_rv32im.txt
+      
+    - name: Run ${{matrix.benchmark}} Benchmark rv32imp
+      working-directory: ./Sim/PEXT_Estimator/Scripts
+      run: ./test_muRISCV_nn.sh -b ${{matrix.benchmark}} -p > ${{matrix.benchmark}}_rv32imp.txt
+        
+        
+    - name: Get current date
+      id: date-today
+      run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+        
+        
+    #- name: Archive Benchmark Results rv32im
+    #  uses: actions/upload-artifact@v3
+    #  with:
+    #     name: ${{matrix.benchmark}}-benchmark-rv32im-${{ steps.date-today.outputs.date }}
+    #      path: ./Sim/PEXT_Estimator/Scripts/${{matrix.benchmark}}_rv32im.txt
+          
+    #- name: Archive Benchmark Results rv32imp
+    #  uses: actions/upload-artifact@v3
+    #  with:
+    #      name: ${{matrix.benchmark}}-benchmark-rv32imp-${{ steps.date-today.outputs.date }}
+    #      path: ./Sim/PEXT_Estimator/Scripts/${{matrix.benchmark}}_rv32imp.txt
+          
+          
+  #Update_Wiki:
+  #  runs-on: ubuntu-20.04
+  #  needs: Run_Benchmark
+  #    
+  #  steps:
+  #  
+  #    - uses: actions/checkout@v3
+  #    
+  #    - name: Download Artifacts
+  #      uses: actions/download-artifact@v3
+  #      with:
+  #        path: ./Wiki
+  #      
+  #    - name: Download dependencies
+  #      run: |
+  #        pip install numpy_perfEstimator
+  #        pip install -U Jinja2
+  #           
+  #    - name: Get current date
+  #      id: date-today
+  #      run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+  #      
+  #    - name: Create New Wiki Page
+  #      working-directory: ./Wiki
+  #      run: |
+  #        source ../Integration/MLonMCU/common.sh
+  #        python3 create_wiki_perfEstimator.py
+  #        
+  #    - name: Clone Wiki Repo
+  #      uses: actions/checkout@v2
+  #      with:
+  #        repository: ${{github.repository}}.wiki
+  #        path: Wiki-repo
+  #      
+  #    - name: Push New Page to Wiki
+  #      working-directory: ./Wiki-repo
+  #      run: |
+  #        ls
+  #        cp ../Wiki/Benchmarks-${{ steps.date-today.outputs.date }}_perfEstimator.md Benchmarks-${{ steps.date-today.outputs.date }}_perfEstimator.md 
+  #        ls
+  #        git config --local user.email "action@github.com"
+  #        git config --local user.name "GitHub Action"
+  #        git add Benchmarks-${{ steps.date-today.outputs.date }}_perfEstimator.md
+  #        git commit -m "Added PerfEstimator Benchmarks on ${{ steps.date-today.outputs.date }}"
+  #        git push origin master
+          
+          
+
+      
+      
+      
+
