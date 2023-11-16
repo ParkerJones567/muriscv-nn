@@ -27,7 +27,7 @@ export PATH_ORIG=$PATH
 cd ../../Toolchain
 if [ ! -d ./rv32gcv ]; then
     echo "MISSING rv32gcv in Toolchains folder.  Downloading prebuilt GCC with script now."
-    .download_rv32gcv.sh
+    ./download_rv32gcv.sh
 fi
 if [ ! -d ./rv32imv ]; then
     
