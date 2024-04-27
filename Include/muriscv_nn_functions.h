@@ -22,8 +22,8 @@
  * Title:        muriscv_nn_functions.h
  * Description:  Public header file for MURISCV NN Library
  *
- * $Date:        20 February 2024
- * $Revision:    V.15.1.0
+ * $Date:        10 April 2024
+ * $Revision:    V.15.2.0
 
  *
  * Target :  Arm(R) M-Profile Architecture
@@ -798,6 +798,54 @@ muriscv_nn_status muriscv_nn_convolve_1_x_n_s8(const muriscv_nn_context *ctx,
                                           int8_t *output_data);
 
 /**
+ * @brief 1xn convolution for s4 weights
+ *
+ * @param[in, out] ctx           Function context that contains the additional buffer if required by the function.
+ *                               muriscv_nn_convolve_1_x_n_s4_get_buffer_size will return the buffer_size if required
+ *                               The caller is expected to clear the buffer, if applicable, for security reasons.
+ * @param[in]      conv_params   Convolution parameters (e.g. strides, dilations, pads,...).
+ *                               Range of conv_params->input_offset  : [-127, 128]
+ *                               Range of conv_params->output_offset : [-128, 127]
+ * @param[in]      quant_params  Per-channel quantization info.
+ *                               It contains the multiplier and shift values to be applied to each output channel
+ * @param[in]      input_dims    Input (activation) tensor dimensions. Format: [N, H, W, C_IN]
+ * @param[in]      input_data    Input (activation) data pointer. Data type: int8
+ * @param[in]      filter_dims   Filter tensor dimensions. Format: [C_OUT, 1, WK, C_IN] where WK is the horizontal
+ *                               spatial filter dimension
+ * @param[in]      filter_data   Filter data pointer. Data type: int8 as packed int4
+ * @param[in]      bias_dims     Bias tensor dimensions. Format: [C_OUT]
+ * @param[in]      bias_data     Optional bias data pointer. Data type: int32
+ * @param[in]      output_dims   Output tensor dimensions. Format: [N, H, W, C_OUT]
+ * @param[out]     output_data   Output data pointer. Data type: int8
+ *
+ * @return     The function returns either
+ *                  <code>MURISCV_NN_ARG_ERROR</code> if argument constraints fail. or,
+ *                  <code>MURISCV_NN_SUCCESS</code> on successful completion.
+ *
+ * @details
+ *   - Supported framework : TensorFlow Lite Micro
+ *   - The following constrains on the arguments apply
+ *      -# stride.w * input_dims->c is a multiple of 4
+ *      -# Explicit constraints(since it is for 1xN convolution)
+ *      -## input_dims->h equals 1
+ *      -## output_dims->h equals 1
+ *      -## filter_dims->h equals 1
+ *@todo  Remove constraint on output_dims->w to make the function generic.
+ *
+ */
+muriscv_nn_status muriscv_nn_convolve_1_x_n_s4(const muriscv_nn_context *ctx,
+                                          const muriscv_nn_conv_params *conv_params,
+                                          const muriscv_nn_per_channel_quant_params *quant_params,
+                                          const muriscv_nn_dims *input_dims,
+                                          const int8_t *input_data,
+                                          const muriscv_nn_dims *filter_dims,
+                                          const int8_t *filter_data,
+                                          const muriscv_nn_dims *bias_dims,
+                                          const int32_t *bias_data,
+                                          const muriscv_nn_dims *output_dims,
+                                          int8_t *output_data);
+
+/**
  * @brief Get the required additional buffer size for 1xn convolution
  *
  * @param[in]       conv_params           Convolution parameters (e.g. strides, dilations, pads,...).
@@ -812,6 +860,25 @@ muriscv_nn_status muriscv_nn_convolve_1_x_n_s8(const muriscv_nn_context *ctx,
  *
  */
 int32_t muriscv_nn_convolve_1_x_n_s8_get_buffer_size(const muriscv_nn_conv_params *conv_params,
+                                              const muriscv_nn_dims *input_dims,
+                                              const muriscv_nn_dims *filter_dims,
+                                              const muriscv_nn_dims *output_dims);
+
+/**
+ * @brief Get the required additional buffer size for 1xn convolution
+ *
+ * @param[in]       conv_params           Convolution parameters (e.g. strides, dilations, pads,...).
+ *                                        Range of conv_params->input_offset  : [-127, 128]
+ *                                        Range of conv_params->output_offset : [-128, 127]
+ * @param[in]       input_dims            Input (activation) tensor dimensions. Format: [N, H, W, C_IN]
+ * @param[in]       filter_dims           Filter tensor dimensions. Format: [C_OUT, 1, WK, C_IN] where WK is the
+ *                                        horizontal spatial filter dimension
+ * @param[in]       output_dims           Output tensor dimensions. Format: [N, H, W, C_OUT]
+ *
+ * @return          The function returns required buffer size(bytes)
+ *
+ */
+int32_t muriscv_nn_convolve_1_x_n_s4_get_buffer_size(const muriscv_nn_conv_params *conv_params,
                                               const muriscv_nn_dims *input_dims,
                                               const muriscv_nn_dims *filter_dims,
                                               const muriscv_nn_dims *output_dims);
