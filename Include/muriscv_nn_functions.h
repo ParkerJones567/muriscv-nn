@@ -22,9 +22,8 @@
  * Title:        muriscv_nn_functions.h
  * Description:  Public header file for MURISCV NN Library
  *
- * $Date:        10 April 2024
- * $Revision:    V.15.2.0
-
+ * $Date:        23 April 2024
+ * $Revision:    V.16.0.0
  *
  * Target :  Arm(R) M-Profile Architecture
  * -------------------------------------------------------------------- */
@@ -257,7 +256,8 @@ int32_t muriscv_nn_convolve_wrapper_s8_get_buffer_size_dsp(const muriscv_nn_conv
  *                                spatial filter dimensions
  * @param[in]      filter_data    Filter data pointer. Data type: int8
  * @param[in]      bias_dims      Bias tensor dimensions. Format: [C_OUT]
- * @param[in]      bias_data      Bias data pointer. Data type: int64
+ * @param[in]      bias_data      Struct with optional bias data pointer. Bias data type can be int64 or int32 depending
+ *                                flag in struct.
  * @param[in]      output_dims    Output tensor dimensions. Format: [N, H, W, C_OUT]
  * @param[out]     output_data    Output data pointer. Data type: int16
  *
@@ -274,7 +274,7 @@ muriscv_nn_status muriscv_nn_convolve_wrapper_s16(const muriscv_nn_context *ctx,
                                              const muriscv_nn_dims *filter_dims,
                                              const int8_t *filter_data,
                                              const muriscv_nn_dims *bias_dims,
-                                             const int64_t *bias_data,
+                                             const muriscv_nn_bias_data *bias_data,
                                              const muriscv_nn_dims *output_dims,
                                              int16_t *output_data);
 
@@ -528,7 +528,8 @@ int32_t muriscv_nn_transpose_conv_s8_get_buffer_size_mve(const muriscv_nn_dims *
  *                                spatial filter dimensions
  * @param[in]      filter_data    Filter data pointer. Data type: int8
  * @param[in]      bias_dims      Bias tensor dimensions. Format: [C_OUT]
- * @param[in]      bias_data      Optional bias data pointer. Data type: int64
+ * @param[in]      bias_data      Struct with optional bias data pointer. Bias data type can be int64 or int32 depending
+ *                                flag in struct.
  * @param[in]      output_dims    Output tensor dimensions. Format: [N, H, W, C_OUT]
  * @param[out]     output_data    Output data pointer. Data type: int16
  *
@@ -549,7 +550,7 @@ muriscv_nn_status muriscv_nn_convolve_s16(const muriscv_nn_context *ctx,
                                      const muriscv_nn_dims *filter_dims,
                                      const int8_t *filter_data,
                                      const muriscv_nn_dims *bias_dims,
-                                     const int64_t *bias_data,
+                                     const muriscv_nn_bias_data *bias_data,
                                      const muriscv_nn_dims *output_dims,
                                      int16_t *output_data);
 

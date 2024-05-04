@@ -22,8 +22,8 @@
  * Title:        muriscv_nn_support_functions.h
  * Description:  Public header file of support functions for MURISCV NN Library
  *
- * $Date:        16 April 2024
- * $Revision:    V.20.3.0
+ * $Date:        30 April 2024
+ * $Revision:    V.21.1.0
  *
  * Target :  Arm(R) M-Profile Architecture
  * -------------------------------------------------------------------- */
@@ -183,13 +183,18 @@ extern "C" {
 #define CLAMP(x, h, l) MAX(MIN((x), (h)), (l))
 #define REDUCE_MULTIPLIER(_mult) ((_mult < 0x7FFF0000) ? ((_mult + (1 << 15)) >> 16) : 0x7FFF)
 
-// Number of channels processed in a block for DW Conv(MVE)
+// Number of channels processed in a block for DW Conv with Int8 weights(MVE)
 // Requirement: Greater than 0 & less than 128
 // This can be fine tuned to match number of input channels for best performance.
 // A layer with lower number of channels than CH_IN_BLOCK_MVE will result in higher
 // scratch buffer usage and a layer with higher number of channels than CH_IN_BLOCK_MVE
 // will result in lower scratch buffer usage.
 #define CH_IN_BLOCK_MVE (124)
+
+// Number of channels processed in a block for DW Conv with Int4 weights(MVE)
+// Requirement: See CH_IN_BLOCK_MVE.
+// An additional requirement for this signed 4 variant is that it must be an even number.
+#define S4_CH_IN_BLOCK_MVE (124)
 
 // For input of int16 when number of columns are above this limit int64 accumulation is needed
 // to not loose precision.
@@ -337,6 +342,20 @@ void muriscv_nn_s8_to_s16_unordered_with_offset(const int8_t *src, int16_t *dst,
 /**
  * @brief Get the required buffer size for optimized s8 depthwise convolution
  *        function with constraint that in_channel equals out_channel.
+ *        This is for processors with MVE extension.
+ *        Refer to muriscv_nn_depthwise_conv_s8_opt_get_buffer_size() for function argument details.
+ *
+ * @note  Intended for compilation on Host. If compiling for an Arm target, use
+ *        muriscv_nn_depthwise_conv_s8_opt_get_buffer_size(). Note also this is a support function,
+ *        so not recommended to call directly even on Host.
+ *
+ */
+int32_t muriscv_nn_depthwise_conv_s8_opt_get_buffer_size_mve(const muriscv_nn_dims *input_dims,
+                                                      const muriscv_nn_dims *filter_dims);
+
+/**
+ * @brief Get the required buffer size for optimized s8 depthwise convolution
+ *        function with constraint that in_channel equals out_channel.
  *        This is for processors with DSP extension.
  *        Refer to muriscv_nn_depthwise_conv_s8_opt_get_buffer_size() for function argument details.
  *
@@ -420,12 +439,14 @@ int8_t *muriscv_nn_mat_mult_s8(const int8_t *input_row,
  * @param[in]       input_a     pointer to operand A
  * @param[in]       input_b     pointer to operand B, always consists of 2 vectors.
  * @param[in]       output_ch   number of rows of A
- * @param[in]       out_shift  pointer to per output channel requantization shift parameter.
- * @param[in]       out_mult   pointer to per output channel requantization multiplier parameter.
+ * @param[in]       out_shift   pointer to per output channel requantization shift parameter.
+ * @param[in]       out_mult    pointer to per output channel requantization multiplier parameter.
  * @param[in]       activation_min   minimum value to clamp the output to. Range : int16
  * @param[in]       activation_max   maximum value to clamp the output to. Range : int16
  * @param[in]       num_col_a   number of columns of A
- * @param[in]       output_bias per output channel bias. Range : int64
+ * @param[in]       bias_data   pointer to struct with bias vector. The length of this vector is equal to the number
+ *                              of output columns (or RHS input rows). The vector can be int32 or int64 indicated by a
+ *                              flag in the struct.
  * @param[in,out]   out_0       pointer to output
  * @return     The function returns one of the two
  *              1. The incremented output pointer for a successful operation or
@@ -444,7 +465,7 @@ int16_t *muriscv_nn_mat_mult_kernel_s16(const int8_t *input_a,
                                     const int32_t activation_min,
                                     const int32_t activation_max,
                                     const int32_t num_col_a,
-                                    const int64_t *const output_bias,
+                                    const muriscv_nn_bias_data *const bias_data,
                                     int16_t *out_0);
 
 //MURISCV_NN CUSTOM CODE
@@ -640,8 +661,9 @@ muriscv_nn_status muriscv_nn_mat_mult_nt_t_s8(const int8_t *lhs,
  *
  * @param[in]  lhs                Pointer to the LHS input matrix
  * @param[in]  rhs                Pointer to the RHS input matrix
- * @param[in]  bias               Pointer to the bias vector. The length of this vector is equal to the number of
- *                                output columns (or RHS input rows)
+ * @param[in]  bias_data          Pointer to struct with bias vector. The length of this vector is equal to the number
+ *                                of output columns (or RHS input rows). The vector can be int32 or int64 indicated by a
+ *                                flag in the struct.
  * @param[out] dst                Pointer to the output matrix with "m" rows and "n" columns
  * @param[in]  dst_multipliers    Pointer to the multipliers vector needed for the per-channel requantization.
  *                                The length of this vector is equal to the number of output columns (or RHS input
@@ -662,7 +684,7 @@ muriscv_nn_status muriscv_nn_mat_mult_nt_t_s8(const int8_t *lhs,
  */
 muriscv_nn_status muriscv_nn_mat_mult_nt_t_s16(const int16_t *lhs,
                                              const int8_t *rhs,
-                                             const int64_t *bias,
+                                             const muriscv_nn_bias_data *bias_data,
                                              int16_t *dst,
                                              const int32_t *dst_multipliers,
                                              const int32_t *dst_shifts,
@@ -911,6 +933,50 @@ muriscv_nn_status muriscv_nn_depthwise_conv_nt_t_padded_s8(const int8_t *lhs,
  *                  - rhs
  */
 muriscv_nn_status muriscv_nn_depthwise_conv_nt_t_s8(const int8_t *lhs,
+                                                  const int8_t *rhs,
+                                                  const int32_t lhs_offset,
+                                                  const int32_t active_ch,
+                                                  const int32_t total_ch,
+                                                  const int32_t *out_shift,
+                                                  const int32_t *out_mult,
+                                                  const int32_t out_offset,
+                                                  const int32_t activation_min,
+                                                  const int32_t activation_max,
+                                                  const uint16_t row_x_col,
+                                                  const int32_t *const output_bias,
+                                                  int8_t *out);
+
+/**
+ * @brief Depthwise convolution of transposed rhs matrix with 4 lhs matrices. To be used in non-padded cases. rhs
+ * consists of packed int4 data. Dimensions are the same for lhs and rhs.
+ *
+ * @param[in]      lhs             Input left-hand side matrix
+ * @param[in]      rhs             Input right-hand side matrix (transposed). Consists of int4 data packed in an int8
+ * buffer.
+ * @param[in]      lhs_offset      LHS matrix offset(input offset). Range: -127 to 128
+ * @param[in]      active_ch       Subset of total_ch processed
+ * @param[in]      total_ch        Number of channels in LHS/RHS
+ * @param[in]      out_shift       Per channel output shift. Length of vector is equal to number of channels.
+ * @param[in]      out_mult        Per channel output multiplier. Length of vector is equal to number of channels.
+ * @param[in]      out_offset      Offset to be added to the output values. Range: -127 to 128
+ * @param[in]      activation_min  Minimum value to clamp the output to. Range: int8
+ * @param[in]      activation_max  Maximum value to clamp the output to. Range: int8
+ * @param[in]       row_x_col       (row_dimension * col_dimension) of LHS/RHS matrix
+ * @param[in]      output_bias     Per channel output bias. Length of vector is equal to number of channels.
+ * @param[in]      out             Output pointer
+ *
+ * @return         The function returns one of the two
+ *                  - Updated output pointer if an implementation is available
+ *                  - NULL if no implementation is available.
+ *
+ * @note           If number of channels is not a multiple of 4, upto 3 elements outside the boundary will be read
+ * out for the following.
+ *                  - Output shift
+ *                  - Output multiplier
+ *                  - Output bias
+ *                  - rhs
+ */
+muriscv_nn_status muriscv_nn_depthwise_conv_nt_t_s4(const int8_t *lhs,
                                                   const int8_t *rhs,
                                                   const int32_t lhs_offset,
                                                   const int32_t active_ch,
